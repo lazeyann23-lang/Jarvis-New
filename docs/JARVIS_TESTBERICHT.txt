@@ -1,0 +1,51 @@
+JARVIS (Dodaios) - Testbericht
+Datum: 19.10.2026
+
+ERGEBNISSE
+- Statische Python-Syntaxpruefung: 4945 Dateien, 0 Syntaxfehler.
+- Archivintegritaet: Original, erweitertes Gesamtpaket und Upgrade-Patch
+  waren mit ZIP CRC-Pruefung fehlerfrei lesbar.
+- Abgeglichene Patch-Dateien stimmten bytegenau mit dem Gesamtpaket ueberein.
+- Gezielte automatisierte Tests: 276 bestanden, 0 fehlgeschlagen.
+  Themen: Gedächtnis, Aufgabenzerlegung, Zustandsautomat, Event-Bus,
+  Missionsbudgets, IDs, Prompt-Injection-Pruefung, Pfadschutz,
+  Loeschbestaetigung, Kritikerverdict und Prompts.
+- Code-Abdeckung der zwei erweiterten Kernmodule durch gezielte Tests:
+  jarvis/missions/experience.py: 93 Prozent
+  jarvis/missions/kontrollierer/decomposer.py: 95 Prozent
+  Beide zusammen: 94 Prozent.
+- Erfahrungsspeicher-CLI (stats/forget/clear): Rauchtest bestanden.
+- Paralleles Speichern von 50 Erfahrungen: bestanden.
+
+GEFUNDENER UND BEHOBENER FEHLER
+- Der neue Erfahrungsspeicher konnte bei beschädigten Plandaten
+  (z.B. Schritten vom Typ None/str) einen AttributeError ausloesen.
+  Korrigiert: Struktur und Metadaten werden vor dem Zugriff validiert.
+  Zwei Regressionstests fuer fehlerhafte Eingaben und parallele
+  Speicherung wurden hinzugefuegt.
+
+EINSCHRAENKUNGEN
+- Es wurden nicht alle ca. 2600 Testmodule des gesamten, sehr grossen
+  Drittprojekts erfolgreich durchlaufen.
+- Vollstaendige Integrationstests sind in dieser Linux-Testumgebung durch
+  fehlende Laufzeitabhaengigkeiten (u.a. aiosqlite, anthropic, structlog)
+  und fehlenden Installations-Netzzugang blockiert.
+- Nicht vor Ort pruefbar: Windows-.exe, Mikrofon/Spracherkennung, Audio,
+  echte KI-Provider/API-Logins, Handy-Fernsteuerung, Browser/GUI-Aktionen,
+  Telefonanrufe, Hardware, Live-Dienste und Langzeit-24/7-Betrieb.
+- Drei vorhandene, nicht-fatale Python-SyntaxWarnings fuer
+  Escape-Sequenzen in einer Hotkey-Datei und zwei bestehenden Testdateien.
+- Ein bestandener Test ist keine Garantie, dass keine Fehler verbleiben,
+  oder dass das Projekt keine unerwuenschten Funktionen enthaelt.
+
+EIGENE WINDOWS-PRUEFUNG
+1. Python und Projektabhaengigkeiten installieren.
+2. Optional Tests installieren: .venv\Scripts\python.exe -m pip install -e ".[dev]"
+3. Im Quellordner TEST_JARVIS_WINDOWS.cmd starten.
+4. Fuer den Volltest (nur in geeigneter Testumgebung):
+   .venv\Scripts\python.exe -m pytest -q tests
+   Dies kann lange dauern, externe Dienste erfordern und Tests enthalten,
+   die ohne Windows-GUI oder Spezialhardware uebersprungen werden.
+
+Das Gedächtnis speichert erfolgreiche Missionsmuster. Es trainiert NICHT
+selbstaendig das zugrundeliegende KI-Modell und ersetzt keine Freigaben.

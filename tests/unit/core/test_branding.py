@@ -1,0 +1,137 @@
+"""Freeze the persistent product identity values used by existing installs.
+
+The display name (``PRODUCT_NAME``) may change; every persistent identifier
+below is a compatibility contract and keeps the value installs were made with.
+"""
+
+from __future__ import annotations
+
+import importlib
+import os
+
+import pytest
+
+import jarvis.core.branding as branding
+
+_CURRENT_IDENTITY = {
+    "PERSISTENT_PRODUCT_NAME": "Personal Jarvis",
+    "PERSISTENT_COMPACT_NAME": "PersonalJarvis",
+    "PERSISTENT_SLUG": "personal-jarvis",
+    "PRODUCT_COMPACT_NAME": "PersonalJarvis",
+    "PRODUCT_SLUG": "personal-jarvis",
+    "LAUNCHER_ENTRY_NAME": "Personal Jarvis",
+    "CONFIG_FILE_NAME": "jarvis.toml",
+    "DISTRIBUTION_NAME": "personal-jarvis",
+    "CLI_COMMAND_NAME": "dodaios",
+    "CONTROL_CLI_COMMAND_NAME": "dodaiosctl",
+    "LEGACY_CLI_COMMAND_NAMES": ("jarvis", "personal-jarvis"),
+    "LEGACY_CONTROL_CLI_COMMAND_NAMES": ("jarvisctl",),
+    "CLI_COMMAND_NAMES": ("dodaios", "dodaiosctl", "jarvis", "personal-jarvis", "jarvisctl"),
+    "SHELL_PROFILE_MARKER": "# Personal Jarvis: command-line tools (jarvis, personal-jarvis)",
+    "FISH_CONF_FILE_NAME": "personal-jarvis.fish",
+    "KEYRING_SERVICE_NAME": "personal-jarvis",
+    "CONTROL_KEY_PREFIX": "jctl_",
+    "SESSION_COOKIE_NAME": "jarvis_session",
+    "MANAGED_INSTALL_MARKER": ".jarvis-managed-install",
+    "DEFAULT_INSTALL_DIR_NAME": ".personal-jarvis",
+    "WINDOWS_USER_DATA_DIR_NAME": "Jarvis",
+    "FALLBACK_USER_DATA_DIR_NAME": ".jarvis",
+    "DESKTOP_OUTPUT_MIRROR_DIR_NAME": "Jarvis-Output",
+    "WINDOWS_MUTEX_NAME": r"Global\PersonalJarvis_v1",
+    "WINDOWS_APP_USER_MODEL_ID": "PersonalJarvis.PersonalJarvis",
+    "WINDOWS_UNINSTALL_REGISTRY_SUBKEY": (
+        r"Software\Microsoft\Windows\CurrentVersion\Uninstall\PersonalJarvis"
+    ),
+    "WINDOWS_AUTOSTART_TASK_NAME": "Personal Jarvis Autostart",
+    "WINDOWS_SHORTCUT_FILE_NAME": "Personal Jarvis.lnk",
+    "WINDOWS_AUTOSTART_DESCRIPTION": "Personal Jarvis (Autostart)",
+    "WINDOWS_BRANDED_LAUNCHER_FILE_NAME": "PersonalJarvis.exe",
+    "WINDOWS_BRANDED_LAUNCHER_DIR_NAME": "PersonalJarvis",
+    "WINDOWS_BRANDED_LAUNCH_ENV_VAR": "JARVIS_BRANDED_LAUNCH",
+    "MACOS_APP_NAME": "Personal Jarvis",
+    "MACOS_APP_DIR_NAME": "Personal Jarvis.app",
+    "MACOS_EXECUTABLE_NAME": "PersonalJarvis",
+    "MACOS_BUNDLE_ID": "com.personal-jarvis.desktop",
+    "MACOS_DMG_BUNDLE_ID": "ai.personaljarvis.desktop",
+    "MACOS_AUTOSTART_LABEL": "com.personal-jarvis.autostart",
+    "MACOS_SIGNING_IDENTITY_LABEL": "Personal Jarvis Local Signing",
+    "LINUX_APP_NAME": "Personal Jarvis",
+    "LINUX_DESKTOP_ENTRY_FILE_NAME": "personal-jarvis.desktop",
+    "LINUX_WM_CLASS": "personal-jarvis",
+    "DEFAULT_OFFICIAL_REPO_SLUG": "Dodaios/Dodaios",
+    "OFFICIAL_REPO_SLUG_ENV_VAR": "JARVIS_OFFICIAL_REPO_SLUG",
+    "OFFICIAL_REPO_SLUG": "Dodaios/Dodaios",
+    "OFFICIAL_REPO_URL": "https://github.com/Dodaios/Dodaios",
+    "OFFICIAL_REPO_GIT_URL": "https://github.com/Dodaios/Dodaios.git",
+    "OFFICIAL_RELEASES_LATEST_API_URL": (
+        "https://api.github.com/repos/Dodaios/Dodaios/releases/latest"
+    ),
+    "UPDATER_USER_AGENT": "PersonalJarvis-Updater",
+}
+
+
+def test_default_exported_identity_values_are_frozen() -> None:
+    previous = os.environ.pop(branding.OFFICIAL_REPO_SLUG_ENV_VAR, None)
+    try:
+        module = importlib.reload(branding)
+        actual = {name: getattr(module, name) for name in _CURRENT_IDENTITY}
+        assert actual == _CURRENT_IDENTITY
+    finally:
+        if previous is not None:
+            os.environ[branding.OFFICIAL_REPO_SLUG_ENV_VAR] = previous
+        importlib.reload(branding)
+
+
+def test_display_name_is_separate_from_persistent_identity() -> None:
+    assert branding.PRODUCT_NAME == "Dodaios"
+    # No persistent identifier is built from the display name: renaming the
+    # product must never move a path, a registry key or a credential store.
+    display = branding.PRODUCT_NAME.casefold()
+    for name in _CURRENT_IDENTITY:
+        if "REPO" in name or "RELEASES" in name:
+            continue  # the repository is itself called Dodaios/Dodaios
+        if "CLI_COMMAND" in name:
+            # The commands are spelled like the product by choice, as literals
+            # of their own: the next test shows they do not follow the display
+            # name, and the earlier command names stay beside them.
+            continue
+        assert display not in str(getattr(branding, name)).casefold(), name
+
+
+def test_persistent_identity_does_not_follow_the_display_name(monkeypatch) -> None:
+    # Derivation, not coincidence: read the module source with a different
+    # display name and every frozen value must come out unchanged.
+    source = branding.__spec__.loader.get_source(branding.__name__)
+    assert source.count('PRODUCT_NAME = "Dodaios"') == 1
+    monkeypatch.delenv(branding.OFFICIAL_REPO_SLUG_ENV_VAR, raising=False)
+    namespace: dict[str, object] = {"__name__": "branding_renamed"}
+    renamed = source.replace('PRODUCT_NAME = "Dodaios"', 'PRODUCT_NAME = "Renamed Again"')
+    exec(compile(renamed, "branding_renamed", "exec"), namespace)  # noqa: S102
+    assert namespace["PRODUCT_NAME"] == "Renamed Again"
+    assert {name: namespace[name] for name in _CURRENT_IDENTITY} == _CURRENT_IDENTITY
+
+
+def test_official_repo_slug_override_is_exact() -> None:
+    assert (
+        branding.resolve_official_repo_slug(
+            {"JARVIS_OFFICIAL_REPO_SLUG": "RenamedOrg/RenamedRepo"}
+        )
+        == "RenamedOrg/RenamedRepo"
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "owner",
+        "owner/repo/extra",
+        "/repo",
+        "owner/",
+        "owner/repo evil",
+        " owner/repo",
+        "owner/repo ",
+    ],
+)
+def test_official_repo_slug_override_rejects_non_exact_values(value: str) -> None:
+    with pytest.raises(ValueError, match="exact owner/repository slug"):
+        branding.resolve_official_repo_slug({"JARVIS_OFFICIAL_REPO_SLUG": value})
