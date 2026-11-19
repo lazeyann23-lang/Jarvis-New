@@ -14,14 +14,7 @@ from dataclasses import dataclass
 
 WEBVIEW2_CLIENT_GUID = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
-# 64-bit installations live under the WOW6432Node path (Edge is registered as a
-# 32-bit client, but the binaries themselves are 64-bit).
-_CANDIDATE_KEYS: tuple[tuple[int, str], ...] = (
-    (0x80000002, rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_CLIENT_GUID}"),
-    (0x80000002, rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_CLIENT_GUID}"),
-    (0x80000001, rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_CLIENT_GUID}"),
-)
-# Constants: HKEY_LOCAL_MACHINE=0x80000002, HKEY_CURRENT_USER=0x80000001.
+_CLIENT_KEY = rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_CLIENT_GUID}"
 
 
 @dataclass(slots=True)
@@ -45,45 +38,19 @@ def check_webview2() -> WebView2CheckResult:
         # Non-Windows — WebView2 is irrelevant, pywebview uses other engines.
         return WebView2CheckResult(installed=True, version=None, scope="none")
 
-    for hive_key, subkey in _CANDIDATE_KEYS:
+    # Edge Update normally registers machine installs in the 32-bit view.
+    # OpenKey accepts the predefined hive constants directly.
+    for hive, view, scope in (
+        (winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_32KEY, "machine"),
+        (winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_64KEY, "machine"),
+        (winreg.HKEY_CURRENT_USER, 0, "user"),
+    ):
         try:
-            with winreg.OpenKey(winreg.HKEYType(hive_key), subkey) as key:  # type: ignore[attr-defined]
+            with winreg.OpenKey(hive, _CLIENT_KEY, 0, winreg.KEY_READ | view) as key:
                 version, _ = winreg.QueryValueEx(key, "pv")
-                if version:
-                    scope = "machine" if hive_key == 0x80000002 else "user"
-                    return WebView2CheckResult(
-                        installed=True, version=str(version), scope=scope
-                    )
         except OSError:
             continue
-
-    # Fallback: the HKEYType derivation above fails on some systems.
-    # Direct access via the OpenKey constants.
-    try:
-        import winreg  # type: ignore[import-not-found]
-
-        for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
-            for subkey in (
-                rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_CLIENT_GUID}",
-                rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_CLIENT_GUID}",
-            ):
-                try:
-                    with winreg.OpenKey(root, subkey) as key:
-                        version, _ = winreg.QueryValueEx(key, "pv")
-                        if version:
-                            scope = (
-                                "machine"
-                                if root == winreg.HKEY_LOCAL_MACHINE
-                                else "user"
-                            )
-                            return WebView2CheckResult(
-                                installed=True,
-                                version=str(version),
-                                scope=scope,
-                            )
-                except OSError:
-                    continue
-    except ImportError:
-        pass
+        if isinstance(version, str) and version.strip() not in {"", "0.0.0.0"}:
+            return WebView2CheckResult(installed=True, version=version.strip(), scope=scope)
 
     return WebView2CheckResult(installed=False, version=None, scope="none")

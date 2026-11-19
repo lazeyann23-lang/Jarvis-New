@@ -1,7 +1,7 @@
 Target amd64-unicode
 Unicode true
 RequestExecutionLevel user
-Name "JARVIS V107"
+Name "JARVIS V108"
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\JARVIS Desktop"
 Icon "${APP_ICON}"
@@ -9,16 +9,17 @@ UninstallIcon "${APP_ICON}"
 SetCompress off
 CRCCheck force
 ManifestDPIAware true
-VIProductVersion "3.2.0.107"
+VIProductVersion "3.2.0.108"
 VIAddVersionKey /LANG=1031 "ProductName" "JARVIS Desktop"
-VIAddVersionKey /LANG=1031 "FileDescription" "JARVIS V107 Setup (Windows x64)"
-VIAddVersionKey /LANG=1031 "FileVersion" "3.2.0.107"
-VIAddVersionKey /LANG=1031 "ProductVersion" "V107"
+VIAddVersionKey /LANG=1031 "FileDescription" "JARVIS V108 Setup (Windows x64)"
+VIAddVersionKey /LANG=1031 "FileVersion" "3.2.0.108"
+VIAddVersionKey /LANG=1031 "ProductVersion" "V108"
 VIAddVersionKey /LANG=1031 "LegalCopyright" "Dodaios contributors"
 
 !include "MUI2.nsh"
 !include "WinVer.nsh"
 
+; Keep the V107 key so the existing installation entry is upgraded in place.
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\JarvisDesktopV107"
 !define WEBVIEW_KEY "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 !define MUI_ABORTWARNING
@@ -26,7 +27,7 @@ VIAddVersionKey /LANG=1031 "LegalCopyright" "Dodaios contributors"
 !define MUI_FINISHPAGE_RUN_FUNCTION LaunchJarvis
 !define MUI_FINISHPAGE_RUN_TEXT "JARVIS starten"
 !define MUI_FINISHPAGE_RUN_NOTCHECKED
-!define MUI_FINISHPAGE_TITLE "JARVIS V107 ist installiert"
+!define MUI_FINISHPAGE_TITLE "JARVIS V108 ist installiert"
 !define MUI_WELCOMEPAGE_TEXT "Dieses Setup installiert JARVIS für dein Windows-Konto, mit Python, Node.js und den Desktop-Abhängigkeiten.$\r$\n$\r$\nSchliesse JARVIS vor einer erneuten Installation. Einstellungen und Gedächtnis bleiben beim Installieren und Deinstallieren im Benutzerordner."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
@@ -67,11 +68,15 @@ FunctionEnd
 Function CheckWebView
   SetRegView 32
   ReadRegStr $0 HKLM "${WEBVIEW_KEY}" "pv"
+  SetRegView 64
+  ${If} $0 == ""
+  ${OrIf} $0 == "0.0.0.0"
+    ReadRegStr $0 HKLM "${WEBVIEW_KEY}" "pv"
+  ${EndIf}
   ${If} $0 == ""
   ${OrIf} $0 == "0.0.0.0"
     ReadRegStr $0 HKCU "${WEBVIEW_KEY}" "pv"
   ${EndIf}
-  SetRegView 64
 FunctionEnd
 
 Function OfferWebView
@@ -147,8 +152,8 @@ promote:
   CreateShortCut "$SMPROGRAMS\JARVIS\JARVIS.lnk" "$INSTDIR\app\python\pythonw.exe" '-E -s "$INSTDIR\app\launch.pyw"' "$INSTDIR\app\jarvis.ico"
   CreateShortCut "$SMPROGRAMS\JARVIS\JARVIS deinstallieren.lnk" "$INSTDIR\Uninstall.exe"
   SetRegView 64
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "JARVIS Desktop V107"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "3.2.0.107"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "JARVIS Desktop V108"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "3.2.0.108"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\app\jarvis.ico"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
