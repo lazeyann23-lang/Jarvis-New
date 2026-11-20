@@ -25,7 +25,7 @@ def main() -> int:
                 None,
                 "Microsoft Edge WebView2 fehlt. Starte das JARVIS-Setup erneut, "
                 "um die Laufzeit zu installieren.",
-                "JARVIS V108",
+                "JARVIS V109",
                 0x10,
             )
             return 1
@@ -48,5 +48,5 @@ if __name__ == "__main__":
         if sys.stderr is not None:
             print(message, file=sys.stderr)
         else:
-            ctypes.windll.user32.MessageBoxW(None, message, "JARVIS V108", 0x10)
+            ctypes.windll.user32.MessageBoxW(None, message, "JARVIS V109", 0x10)
         raise SystemExit(1) from error

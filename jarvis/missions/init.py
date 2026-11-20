@@ -48,7 +48,7 @@ from .event_bus import MissionBus
 from .experience import MissionExperienceCollector, MissionExperienceMemory
 from .isolation.env import build_worker_env, read_live_claude_oauth_token
 from .isolation.worktree import WorktreeManager
-from .kontrollierer.decomposer import MissionDecomposer
+from .kontrollierer.decomposer import MissionDecomposer, Step
 from .kontrollierer.orchestrator import Kontrollierer
 from .manager import MissionManager
 from .task_bridge import MissionEventBridge
@@ -62,6 +62,7 @@ from .worker_runtime.provider_map import (
 )
 from .workers.api_agent_worker import ApiAgentWorker
 from .workers.capabilities import (
+    RESTRICTED_WORKER_KNOWLEDGE_TOOLS,
     WorkerCapabilityInventory,
     restricted_worker_app_commands,
     restricted_worker_knowledge_tools,
@@ -1425,9 +1426,13 @@ async def bootstrap_missions(
             openrouter_api_key=openrouter_key,
         )
 
-    def _worker_factory(step):  # noqa: ANN001 - Step type local
+    def _worker_factory(
+        step: Step,
+        capability_inventory: WorkerCapabilityInventory | None = None,
+    ) -> Any:
         task_text = getattr(step, "prompt", "") or ""
-        capability_inventory = _assemble_worker_capability_inventory(task_text)
+        if capability_inventory is None:
+            capability_inventory = _assemble_worker_capability_inventory(task_text)
         # Worker routing post-Welle-4:
         #
         # 1. If ``[brain.sub_jarvis].provider`` is set in jarvis.toml,
@@ -1641,6 +1646,22 @@ async def bootstrap_missions(
             return cross
         return ClaudeDirectWorker(capability_inventory=capability_inventory)
 
+    from jarvis.brain.tool_gateway import MissionWorkerFanout
+    from jarvis.plugins.tool.spawn_subagents import SpawnSubagentsTool
+
+    from .subagent_fanout import SubagentFanoutRunner
+
+    fanout_runner = SubagentFanoutRunner(
+        worker_factory=_worker_factory,
+        env_builder=_env_builder,
+        job_factory=_default_job_factory,
+        isolation_root=isolation_root,
+        manager=manager,
+        child_inventory_builder=lambda prompt: WorkerCapabilityInventory.build(
+            native_tool_names=(*RESTRICTED_WORKER_KNOWLEDGE_TOOLS, "search_web"),
+            task_text=prompt,
+        ),
+    )
     kontrollierer = Kontrollierer(
         manager=manager,
         decomposer=decomposer,
@@ -1655,6 +1676,10 @@ async def bootstrap_missions(
         safety_enabled=safety_enabled,
         extra_blocked_globs=extra_blocked_globs,
         paid_option=ApiKeyPaidOption(),
+        mission_fanout=MissionWorkerFanout(
+            tool=SpawnSubagentsTool(runner=fanout_runner),
+            authorized_prompt=manager.store.get_subagent_prompt,
+        ),
     )
 
     # 8. VoiceListener / Announcer — mutually exclusive (2026-05-27 finding

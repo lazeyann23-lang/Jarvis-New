@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS missions (
     -- provably dead instead of waiting out the freshness window
     -- (jarvis/missions/ownership.py). 0 = unknown.
     owner_pid         INTEGER NOT NULL DEFAULT 0,
-    owner_start_ms    INTEGER NOT NULL DEFAULT 0
+    owner_start_ms    INTEGER NOT NULL DEFAULT 0,
+    subagents_enabled INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_missions_state ON missions(state);

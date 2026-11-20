@@ -223,7 +223,9 @@ async def test_broker_rejects_forged_config_command_grant() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ask_tier_waits_then_resumes_the_exact_call_after_approval() -> None:
+async def test_ask_tier_waits_then_resumes_the_exact_call_after_approval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     bus = EventBus()
     approval = ApprovalWorkflow(bus, timeout_s=1.0)
     executor = ToolExecutor(
@@ -236,6 +238,12 @@ async def test_ask_tier_waits_then_resumes_the_exact_call_after_approval() -> No
     manager = SimpleNamespace(_tool_executor=executor, _tools={tool.name: tool})
     runtime_refs.set_brain_manager(manager)
     runtime_refs.set_supervisor_tool_gateway(BrainSupervisorToolGateway(manager))
+
+    async def mission_is_active(mission_id: str) -> bool:
+        return mission_id == "mission-123"
+
+    monkeypatch.setattr(runtime_refs, "_MISSION_TOOL_EXECUTION_CHECKER", [])
+    runtime_refs.set_mission_tool_execution_checker(mission_is_active)
     requested = asyncio.Event()
     request: ActionApprovalRequired | None = None
 

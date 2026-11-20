@@ -12,7 +12,10 @@ actions, and configuration mutation remain absent (AP-5/AP-14).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from jarvis.brain.tool_gateway import MissionWorkerFanout
 
 RESTRICTED_WORKER_KNOWLEDGE_TOOLS: tuple[str, ...] = (
     "wiki-list",
@@ -108,6 +111,7 @@ class WorkerCapabilityInventory:
         ttl_s: float = 25 * 60.0,
         mission_id: str | None = None,
         worker_id: str | None = None,
+        mission_fanout: MissionWorkerFanout | None = None,
     ):  # noqa: ANN201
         """Create the short-lived live grant for this mission, if reachable."""
         from .worker_tool_broker import issue_worker_tool_binding
@@ -120,6 +124,7 @@ class WorkerCapabilityInventory:
             ttl_s=ttl_s,
             mission_id=mission_id,
             worker_id=worker_id,
+            mission_fanout=mission_fanout,
         )
 
     def report_for(self, backend: str, *, binding: Any | None = None) -> dict[str, Any]:

@@ -130,6 +130,7 @@ class MissionManager:
         source_actor: SourceActor = "hauptjarvis",
         priority: int = 0,
         parent_mission_id: str | None = None,
+        subagents_enabled: bool = False,
     ) -> str:
         """Erzeuge eine neue Mission im PENDING-State. Returns `mission_id`."""
         self._ensure_started()
@@ -154,6 +155,7 @@ class MissionManager:
             state=MissionState.PENDING.value,
             language=language,
             ts_ms=ts,
+            subagents_enabled=subagents_enabled is True and parent_mission_id is None,
         )
         await self._store.append_and_publish(env)
         return mission_id

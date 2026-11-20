@@ -85,7 +85,7 @@ class MissionEventStore:
                 "ALTER TABLE missions ADD COLUMN last_heartbeat_ms INTEGER NOT NULL DEFAULT 0"
             )
             log.info("MissionEventStore: migration applied — added 'last_heartbeat_ms'")
-        for column in ("owner_pid", "owner_start_ms"):
+        for column in ("owner_pid", "owner_start_ms", "subagents_enabled"):
             if column not in existing_cols:
                 await self.conn.execute(
                     f"ALTER TABLE missions ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"
@@ -721,6 +721,7 @@ class MissionEventStore:
         ts_ms: int,
         iteration: int = 0,
         cost_usd: float = 0.0,
+        subagents_enabled: bool = False,
     ) -> None:
         """Create a mission header or update state + iteration + cost.
 
@@ -733,9 +734,9 @@ class MissionEventStore:
             """
             INSERT INTO missions (
                 id, prompt, state, language, created_ms, updated_ms,
-                iteration, cost_usd
+                iteration, cost_usd, subagents_enabled
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 state = excluded.state,
                 updated_ms = excluded.updated_ms,
@@ -751,8 +752,24 @@ class MissionEventStore:
                 ts_ms,
                 iteration,
                 cost_usd,
+                int(subagents_enabled),
             ),
         )
+
+    async def get_subagent_prompt(self, mission_id: str) -> str | None:
+        """Return the original prompt only for a running, opted-in mission."""
+        async with self.conn.execute(
+            "SELECT prompt FROM missions WHERE id = ? AND subagents_enabled = 1 "
+            "AND state IN (?, ?, ?)",
+            (
+                mission_id,
+                MissionState.RUNNING.value,
+                MissionState.CRITIQUING.value,
+                MissionState.LOOPING.value,
+            ),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return str(row[0]) if row is not None else None
 
     async def get_mission_view(
         self, mission_id: str

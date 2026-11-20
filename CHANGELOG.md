@@ -11,6 +11,22 @@ versioning per [SemVer](https://semver.org/).
 
 ---
 
+## [Windows V109] — 2026-11-20
+
+### Added
+
+- Start missions with explicit permission to delegate. The desktop dashboard
+  and core-only view show child worker progress and let the user cancel the mission.
+
+### Fixed
+
+- Keep child workspaces separate across concurrent missions and cancel active
+  children when the parent worker's grant is revoked.
+- Verify the Windows payload before compiling setup. The release retains the
+  WebView2 registry fix from Windows V108.
+
+---
+
 ## [3.2.0] — 2026-10-13
 
 ### Added

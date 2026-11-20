@@ -33,7 +33,7 @@ import re
 from collections.abc import Callable
 from typing import Any, Final
 
-from jarvis.core.protocols import ExecutionContext, ToolResult
+from jarvis.core.protocols import ExecutionContext, RiskTier, ToolResult
 
 log = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class SpawnSubagentsTool:
     """Fan a mission out into parallel child sub-agents (one layer only)."""
 
     name: str = "spawn_subagents"
-    risk_tier: str = "monitor"
+    risk_tier: RiskTier = "monitor"
     # The description doubles as the orchestration hint — CLI workers read
     # tool capabilities from the broker's tool listing, so this is the one
     # text every backend is guaranteed to see (ADR-0011: models pick tools by
@@ -194,11 +194,12 @@ class SpawnSubagentsTool:
                 ),
             )
 
-        prompts = [
-            p.strip()
-            for p in (args.get("prompts") or [])
-            if isinstance(p, str) and p.strip()
-        ]
+        raw_prompts = args.get("prompts")
+        if not isinstance(raw_prompts, list) or any(
+            not isinstance(prompt, str) or not prompt.strip() for prompt in raw_prompts
+        ):
+            return ToolResult(False, None, "prompts must contain non-empty task strings")
+        prompts = [prompt.strip() for prompt in raw_prompts]
         if not prompts:
             return ToolResult(
                 success=False, output=None, error="prompts must not be empty"

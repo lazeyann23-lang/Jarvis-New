@@ -34,7 +34,7 @@ from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 from ...core.process_utils import NO_WINDOW_CREATIONFLAGS
 from ..budget import BudgetExceeded, BudgetTracker
@@ -124,6 +124,9 @@ from .deliverable import (
 )
 from .deliverable_paths import find_generator_scripts, is_deliverable_path
 from .worker_prompt import compose_worker_prompt
+
+if TYPE_CHECKING:
+    from ...brain.tool_gateway import MissionWorkerFanout
 
 logger = logging.getLogger(__name__)
 
@@ -911,6 +914,7 @@ class Kontrollierer:
         # Live answers for capacity decisions (pinned install, paid-fallback
         # setting, daily paid ledger). None = the install's real ones.
         capacity_policy: CapacityPolicy | None = None,
+        mission_fanout: MissionWorkerFanout | None = None,
     ) -> None:
         self._manager = manager
         self._paid_option = paid_option
@@ -923,6 +927,7 @@ class Kontrollierer:
         self._worker_factory = worker_factory
         self._job_factory = job_factory
         self._isolation_root = isolation_root
+        self._mission_fanout = mission_fanout
         self._max_workers = max(1, min(max_workers, MAX_WORKERS_PER_MISSION))
         # Global cap on concurrent heavy (claude worker+critic) mission phases.
         self._mission_sem = asyncio.Semaphore(max(1, max_concurrent_missions))
@@ -1779,6 +1784,7 @@ class Kontrollierer:
                         step=step,
                         iteration=iteration,
                         resume_session_id=None,
+                        allow_subagents=paid_gate is None,
                     )
                 except Exception:  # noqa: BLE001
                     logger.exception(
@@ -2392,6 +2398,7 @@ class Kontrollierer:
         step: Step,
         iteration: int,
         resume_session_id: str | None,
+        allow_subagents: bool = True,
     ) -> Kontrollierer._SpawnResult:
         """Spawns the worker, drains the stream, and aggregates cost/tokens/session.
 
@@ -2423,13 +2430,37 @@ class Kontrollierer:
         bind_broker = getattr(inventory, "bind_broker", None)
         if callable(bind_broker):
             try:
+                options: dict[str, Any] = {}
+                # Paid fallback is tied to the approved provider, model and
+                # call gate. Grok Build cannot attach this broker's MCP adapter.
+                fanout = self._mission_fanout if allow_subagents else None
+                if (
+                    fanout is not None
+                    and worker_family(worker) != "grok-build"
+                    and await fanout.authorized_prompt(mission_id) is not None
+                ):
+                    options["mission_fanout"] = fanout
                 issued_binding = bind_broker(
                     ttl_s=worker_timeout_s + 60.0,
                     mission_id=mission_id,
                     worker_id=worker_id,
+                    **options,
                 )
                 if issued_binding is not None:
                     broker_binding = issued_binding
+                    if (
+                        iteration == 0
+                        and fanout is not None
+                        and "mission_fanout" in options
+                        and fanout.tool.name in broker_binding.tool_names
+                    ):
+                        worker_prompt += (
+                            "\n\nThe user enabled sub-agents for this mission. If you have the "
+                            "spawn_subagents tool, use it when independent subtasks benefit "
+                            "from parallel work. Give each sub-agent a self-contained task "
+                            "and integrate its answer. Continue yourself if delegation "
+                            "is unavailable."
+                        )
             except Exception:  # noqa: BLE001 - unavailable tools degrade honestly
                 logger.exception(
                     "Mission %s worker %s: supervisor tool grant unavailable",

@@ -95,6 +95,7 @@ body.jarvis-chef-hud-active { overflow:hidden; }
 #jarvis-chef-hud .jh-stat-row small {font-size:13px;line-height:1;color:#0b8ac7;}
 #jarvis-chef-hud .jh-right-tabs {display:flex;flex:none;gap:2px;}
 #jarvis-chef-hud .jh-right-tabs button {padding:8px 0;flex:1;font-size:8px;}
+@media(max-width:850px){#jarvis-chef-hud .jh-right-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));}}
 #jarvis-chef-hud .jh-right-tabs button.selected {color:white;background:#0973b8;box-shadow:inset 0 0 12px #22aefe;}
 #jarvis-chef-hud .jh-right-content {border:1px solid #285679;background:#020e21;min-height:90px;flex:1;overflow:hidden;position:relative;}
 #jarvis-chef-hud .jh-chat-area {height:100%;width:100%;}
@@ -105,17 +106,19 @@ body.jarvis-chef-hud-active { overflow:hidden; }
 #jarvis-chef-hud .jh-information p {font-size:11px;color:#91b8ce;}
 #jarvis-chef-hud .jh-info-row {font-size:11px;padding:10px 4px;border-bottom:1px solid #133552;word-break:break-word;}
 #jarvis-chef-hud .jh-information>button {padding:9px;margin-top:18px;width:100%;}
-#jarvis-chef-hud .jh-desktop-panel form {display:grid;gap:8px;}
-#jarvis-chef-hud .jh-desktop-panel textarea {
+#jarvis-chef-hud .jh-control-panel form {display:grid;gap:8px;margin-bottom:12px;}
+#jarvis-chef-hud .jh-control-panel select {margin-top:6px;}
+#jarvis-chef-hud .jh-control-panel form>button {padding:8px 9px;}
+#jarvis-chef-hud .jh-control-panel textarea, #jarvis-chef-hud .jh-control-panel select {
   box-sizing:border-box;width:100%;padding:9px;resize:vertical;font:inherit;
   color:#eef9ff;background:#062041;border:1px solid #3982ae;border-radius:4px;
 }
-#jarvis-chef-hud .jh-desktop-panel :focus-visible {outline:2px solid #64dbff;outline-offset:2px;}
-#jarvis-chef-hud .jh-desktop-panel [disabled] {opacity:.55;cursor:default;}
-#jarvis-chef-hud .jh-desktop-actions {display:flex;flex-wrap:wrap;gap:6px;}
-#jarvis-chef-hud .jh-desktop-actions button {padding:8px 9px;}
-#jarvis-chef-hud .jh-desktop-panel ul {list-style:none;padding:0;margin:12px 0;}
-#jarvis-chef-hud .jh-desktop-panel li {padding:8px 0;border-top:1px solid #274c6a;overflow-wrap:anywhere;}
+#jarvis-chef-hud .jh-control-panel :focus-visible {outline:2px solid #64dbff;outline-offset:2px;}
+#jarvis-chef-hud .jh-control-panel [disabled] {opacity:.55;cursor:default;}
+#jarvis-chef-hud .jh-control-actions {display:flex;flex-wrap:wrap;gap:6px;}
+#jarvis-chef-hud .jh-control-actions button {padding:8px 9px;}
+#jarvis-chef-hud .jh-control-panel ul {list-style:none;padding:0;margin:12px 0;}
+#jarvis-chef-hud .jh-control-panel li {padding:8px 0;border-top:1px solid #274c6a;overflow-wrap:anywhere;}
 #jarvis-chef-hud .jh-desktop-result {margin-top:4px;color:#b9d8ed;white-space:pre-wrap;}
 #jarvis-chef-hud .jh-right-actions {display:flex;gap:6px;flex-direction:column;flex:none;}
 #jarvis-chef-hud .jh-right-actions>button {padding:8px;border-color:#17a2e6;background:#07558c;letter-spacing:.11em;}

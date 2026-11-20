@@ -1,6 +1,6 @@
-# JARVIS V107 Windows setup
+# JARVIS V109 Windows setup
 
-The x64 installer includes the V107 application wheel, CPython, Node.js and the
+The x64 installer includes the V109 application wheel, CPython, Node.js and the
 `desktop` dependencies from `uv.lock`. It installs for the current user
 under `%LOCALAPPDATA%\Programs\JARVIS Desktop`. The installer offers
 Microsoft's WebView2 bootstrapper when needed. The bootstrapper downloads
@@ -18,7 +18,7 @@ Run from the project root with Python 3.12+, uv, 7-Zip and NSIS 3.11+ on the PAT
 Internet access is required to build the installer.
 
 ```shell
-python packaging/windows/build-setup.py --work-dir ./dist/setup-work --output ./dist/JARVIS-V107-Setup-x64.exe
+python packaging/windows/build-setup.py --work-dir ./dist/setup-work --output ./dist/JARVIS-V109-Setup-x64.exe
 ```
 
 The build checks pinned hashes for downloaded runtimes, installs the locked
@@ -35,3 +35,16 @@ Configure a vision-capable Tool Model, open PC control and submit a desktop
 goal. The panel shows recent runs and their recorded outcomes. The stop
 button cancels queued and running computer-use missions. The global Escape
 key remains available while the desktop controller has the mouse.
+
+## Subagent jobs
+
+Open **Subagenten**, enter a task, and choose **Auftrag delegieren**. A
+configured mission worker can delegate independent tasks to its subagents.
+The panel reports child lifecycle events and cancels the selected parent
+mission together with its running children.
+
+Verify the package before publishing:
+
+```shell
+python packaging/windows/smoke-setup.py payload ./dist/setup-work/payload.zip --verify jarvis/missions/subagent_fanout.py
+```

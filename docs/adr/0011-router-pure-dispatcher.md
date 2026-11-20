@@ -1493,3 +1493,17 @@ recorded among the tools that ran, gets no spoken acknowledgement and no
   revealing found tools, the manager's three reasons)
 - `tests/unit/brain/test_context_window_fit.py` (window and count limits)
 - `tests/unit/brain/test_routing.py` (exact router set, unchanged)
+
+## Amendment 2026-11-20 - mission-scoped child delegation
+
+The desktop mission form records an explicit delegation grant on the parent
+mission. The supervisor issues `spawn_subagents` through that mission worker's
+authenticated broker binding. Each call rechecks the persisted grant and
+uses the original user request to calculate the child budget. Delegation
+stays bound to the parent worker's lifetime.
+
+Child workers receive isolated workspaces and a knowledge-tool inventory.
+The broker and tool both enforce the one-layer limit. The router and the
+standing worker inventory keep their existing tool sets.
+
+The broker integration is covered by `tests/missions/test_subagent_wiring.py`.

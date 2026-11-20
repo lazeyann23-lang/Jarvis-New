@@ -1,13 +1,15 @@
 # Jarvis-New
 
-## JARVIS V108 for Windows
+## JARVIS V109 for Windows
 
-[Download the Windows x64 installer](https://github.com/lazeyann23-lang/Jarvis-New/releases/tag/v108).
+[Download the Windows x64 installer](https://github.com/lazeyann23-lang/Jarvis-New/releases/tag/v109).
 Open the setup file on Windows 10 or 11 and launch JARVIS from the Start menu.
 Python and Node.js are bundled. WebView2 is offered if it is missing.
 
 Use **PC-Steuerung** in the dashboard to start, follow and stop desktop jobs.
-Visual jobs require a vision-capable model. See the [Windows build and setup notes](packaging/windows/SETUP-V107.md).
+Visual jobs require a vision-capable model. Use **Subagenten** to opt into
+subagent delegation and follow the resulting child workers. See the
+[Windows build and setup notes](packaging/windows/SETUP-V107.md).
 
 ---
 

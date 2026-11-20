@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import threading
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, replace
 from typing import Any, cast
 from uuid import UUID
 
@@ -40,6 +41,12 @@ _VOICE_SUPERSEDED_TOOLS = frozenset(
         "screenshot",
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class MissionWorkerFanout:
+    tool: Tool
+    authorized_prompt: Callable[[str], Awaitable[str | None]]
 
 
 class BrainSupervisorToolGateway:
@@ -196,6 +203,12 @@ class BrainSupervisorToolGateway:
         """Live models can see desktop primitives without a second tool model."""
         return self._describe(self._voice_tools())
 
+    def for_mission_worker(
+        self, fanout: MissionWorkerFanout, mission_id: str, worker_id: str
+    ) -> _MissionWorkerToolGateway:
+        """Expose the fan-out tool only inside one authenticated worker grant."""
+        return _MissionWorkerToolGateway(self, fanout, mission_id, worker_id)
+
     async def execute(
         self,
         name: str,
@@ -231,6 +244,11 @@ class BrainSupervisorToolGateway:
                 and ref.startswith("agent-chat:")
                 else None
             )
+        return await self._execute_tool(tool, arguments, request)
+
+    async def _execute_tool(
+        self, tool: Any, arguments: dict[str, Any], request: SupervisorToolRequest
+    ) -> ToolResult:
         executor = getattr(self._manager, "_tool_executor", None)
         if tool is None or not callable(getattr(tool, "execute", None)):
             return ToolResult(
@@ -340,4 +358,37 @@ class BrainSupervisorToolGateway:
             await publish(name, reason, trace_id=trace_id)
 
 
-__all__ = ["BrainSupervisorToolGateway"]
+@dataclass(frozen=True, slots=True)
+class _MissionWorkerToolGateway:
+    supervisor: BrainSupervisorToolGateway
+    fanout: MissionWorkerFanout
+    mission_id: str
+    worker_id: str
+
+    def catalog(self) -> tuple[SupervisorToolDescriptor, ...]:
+        tool = self.fanout.tool
+        return (*self.supervisor.catalog(), *self.supervisor._describe({tool.name: tool}))
+
+    async def execute(
+        self, name: str, arguments: dict[str, Any], request: SupervisorToolRequest
+    ) -> ToolResult:
+        tool = self.fanout.tool
+        if name != tool.name:
+            return await self.supervisor.execute(name, arguments, request)
+        if (
+            request.origin != "mission_worker"
+            or request.config_snapshot.get("worker_broker") is not True
+            or request.mission_id != self.mission_id
+            or request.worker_id != self.worker_id
+        ):
+            return ToolResult(success=False, output=None, error="Worker grant does not match.")
+        prompt = await self.fanout.authorized_prompt(self.mission_id)
+        if prompt is None:
+            return ToolResult(success=False, output=None, error="Mission fan-out is unavailable.")
+        # Only the user's original prompt can increase the per-mission budget.
+        return await self.supervisor._execute_tool(
+            tool, arguments, replace(request, user_utterance=prompt)
+        )
+
+
+__all__ = ["BrainSupervisorToolGateway", "MissionWorkerFanout"]

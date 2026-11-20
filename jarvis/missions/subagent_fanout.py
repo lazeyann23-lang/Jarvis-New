@@ -38,6 +38,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from .events import (
     EventEnvelope,
@@ -54,9 +55,7 @@ logger = logging.getLogger(__name__)
 #: whose worker_id contains it — a child can never fan out again (layer wall).
 SUBAGENT_WORKER_MARKER = "::sub"
 
-#: How many children may RUN at the same time. The total per mission is
-#: budgeted by the tool; this only bounds simultaneous subprocesses so a
-#: user-authorized larger fan-out cannot fork-bomb the host.
+#: How many children may run across all batches using the same runner.
 _MAX_CONCURRENT_CHILDREN = 10
 
 #: Per-child wall-clock defaults/bounds (seconds). The child timeout is a
@@ -113,6 +112,7 @@ class SubagentFanoutRunner:
         self._isolation_root = Path(isolation_root)
         self._manager = manager
         self._child_inventory_builder = child_inventory_builder
+        self._child_slots = asyncio.Semaphore(_MAX_CONCURRENT_CHILDREN)
 
     async def run(
         self,
@@ -121,25 +121,28 @@ class SubagentFanoutRunner:
         prompts: list[str],
         timeout_s: int = DEFAULT_CHILD_TIMEOUT_S,
     ) -> list[SubagentResult]:
-        """Run one bounded fan-out round; never raises.
+        """Run one bounded fan-out round.
 
         Every child failure is contained in its own :class:`SubagentResult`
         so one crashed clone can never take down the siblings or the parent's
-        tool call.
+        tool call. Parent cancellation propagates to the active children.
         """
         timeout = max(MIN_CHILD_TIMEOUT_S, min(int(timeout_s), MAX_CHILD_TIMEOUT_S))
-        mission_dir = self._isolation_root / f"mission_{mission_id[:13]}"
-        fanout_root = mission_dir / "subagents"
-        sem = asyncio.Semaphore(_MAX_CONCURRENT_CHILDREN)
-        existing = self._next_child_ordinal(fanout_root)
+        # UUIDv7's first 13 characters contain only the timestamp. Use the
+        # entire id so different missions started in the same millisecond
+        # never share child state. The startup sweep ages each mission separately.
+        fanout_root = self._isolation_root / f"subagents_{UUID(mission_id).hex}"
 
         async def _guarded(index: int, prompt: str) -> SubagentResult:
-            async with sem:
+            async with self._child_slots:
+                ordinal = index
+                workspace: Path | None = None
                 try:
+                    ordinal, workspace = self._reserve_child_workspace(fanout_root)
                     return await self._run_child(
                         mission_id=mission_id,
-                        mission_dir=mission_dir,
-                        ordinal=existing + index,
+                        workspace=workspace,
+                        ordinal=ordinal,
                         prompt=prompt,
                         timeout_s=timeout,
                     )
@@ -147,13 +150,13 @@ class SubagentFanoutRunner:
                     logger.exception(
                         "Mission %s: sub-agent %d crashed outside the worker",
                         mission_id,
-                        index,
+                        ordinal,
                     )
                     return SubagentResult(
-                        index=index,
+                        index=ordinal,
                         ok=False,
                         answer="",
-                        workspace="",
+                        workspace=str(workspace) if workspace is not None else "",
                         error=f"{type(exc).__name__}: {exc}"[:300],
                     )
 
@@ -163,23 +166,31 @@ class SubagentFanoutRunner:
         return list(results)
 
     @staticmethod
-    def _next_child_ordinal(fanout_root: Path) -> int:
-        """First free ``sub-NN`` ordinal, so repeated rounds never collide."""
-        try:
-            taken = [
-                int(p.name[4:])
-                for p in fanout_root.iterdir()
-                if p.is_dir() and p.name.startswith("sub-") and p.name[4:].isdigit()
-            ]
-        except OSError:
-            return 0
-        return (max(taken) + 1) if taken else 0
+    def _reserve_child_workspace(fanout_root: Path) -> tuple[int, Path]:
+        """Reserve a new durable ordinal without sharing an existing directory."""
+        fanout_root.mkdir(parents=True, exist_ok=True)
+        ordinal = 1 + max(
+            (
+                int(path.name[4:])
+                for path in fanout_root.iterdir()
+                if path.name.startswith("sub-") and path.name[4:].isdigit()
+            ),
+            default=-1,
+        )
+        while True:
+            workspace = fanout_root / f"sub-{ordinal:02d}"
+            try:
+                workspace.mkdir()
+            except FileExistsError:
+                ordinal += 1
+                continue
+            return ordinal, workspace
 
     async def _run_child(
         self,
         *,
         mission_id: str,
-        mission_dir: Path,
+        workspace: Path,
         ordinal: int,
         prompt: str,
         timeout_s: int,
@@ -190,10 +201,9 @@ class SubagentFanoutRunner:
         from .workers.worker_tool_broker import EmptyWorkerToolBrokerBinding
 
         started = asyncio.get_running_loop().time()
-        workspace = mission_dir / "subagents" / f"sub-{ordinal:02d}"
         log_dir = workspace / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        worker_id = f"{mission_id[:13]}{SUBAGENT_WORKER_MARKER}-{ordinal:02d}"
+        log_dir.mkdir()
+        worker_id = f"{mission_id}{SUBAGENT_WORKER_MARKER}-{ordinal:02d}"
 
         step = Step(
             task_id=uuid7_str(),
@@ -242,14 +252,14 @@ class SubagentFanoutRunner:
         error: str | None = None
         timed_out = False
         spawned_emitted = False
-        job = self._job_factory()
         try:
-            async with job:
-                async with asyncio.timeout(timeout_s + _CHILD_TIMEOUT_GRACE_S):
+            try:
+                job = self._job_factory()
+                async with job, asyncio.timeout(timeout_s + _CHILD_TIMEOUT_GRACE_S):
                     async for ev in worker.spawn(
                         child_prompt,
                         worktree=workspace,
-                        env=self._env_builder(mission_dir),
+                        env=self._env_builder(workspace),
                         job=job,
                         worker_id=worker_id,
                         log_dir=log_dir,
@@ -290,11 +300,25 @@ class SubagentFanoutRunner:
                             error = str(upstream)[:300]
                         if getattr(ev, "timed_out", False):
                             timed_out = True
+            finally:
+                try:
+                    await broker_binding.aclose()
+                except Exception as exc:  # noqa: BLE001 - preserve cancellation
+                    logger.exception("Failed to close sub-agent %s tool grant", worker_id)
+                    error = error or f"{type(exc).__name__}: {exc}"[:300]
+        except asyncio.CancelledError:
+            if spawned_emitted:
+                await self._publish(
+                    mission_id,
+                    WorkerKilled(worker_id=worker_id, reason="parent_cancelled"),
+                )
+            raise
         except TimeoutError:
             timed_out = True
             error = error or f"sub-agent exceeded {timeout_s}s"
-        finally:
-            await broker_binding.aclose()
+        except Exception as exc:  # noqa: BLE001 - keep siblings running
+            logger.exception("Sub-agent %s failed", worker_id)
+            error = error or f"{type(exc).__name__}: {exc}"[:300]
 
         duration = asyncio.get_running_loop().time() - started
         answer = self._read_final_answer(log_dir)
@@ -350,19 +374,31 @@ class SubagentFanoutRunner:
 
     async def _publish(self, mission_id: str, payload: Any) -> None:
         """Best-effort board/budget event — a publish fault never fails a child."""
-        try:
-            await self._manager.store.append_and_publish(
-                EventEnvelope(
-                    mission_id=mission_id,
-                    source_actor="worker",
-                    ts_ms=now_ms(),
-                    payload=payload,
+
+        async def publish() -> None:
+            try:
+                await self._manager.store.append_and_publish(
+                    EventEnvelope(
+                        mission_id=mission_id,
+                        worker_id=payload.worker_id,
+                        source_actor="worker",
+                        ts_ms=now_ms(),
+                        payload=payload,
+                    )
                 )
-            )
-        except Exception:  # noqa: BLE001 - visibility is best-effort
-            logger.debug(
-                "sub-agent event publish failed for %s", mission_id, exc_info=True
-            )
+            except Exception:  # noqa: BLE001 - visibility is best-effort
+                logger.debug(
+                    "sub-agent event publish failed for %s", mission_id, exc_info=True
+                )
+
+        # Complete the append before cancellation records a terminal event.
+        # This also protects a result append when cancellation races completion.
+        pending = asyncio.create_task(publish())
+        try:
+            await asyncio.shield(pending)
+        except asyncio.CancelledError:
+            await pending
+            raise
 
 
 __all__ = [

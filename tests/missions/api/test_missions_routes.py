@@ -24,6 +24,7 @@ from jarvis.missions.events import (
     CriticVerdictReady,
     EventEnvelope,
     MissionApproved,
+    WorkerDraftReady,
     WorkerKilled,
     WorkerSpawned,
     now_ms,
@@ -158,6 +159,24 @@ def test_list_active_leaves_out_missions_that_ended(app_with_manager: FastAPI) -
         assert [m["id"] for m in both["missions"]] == [ended["mission_id"]]
 
 
+def test_delegation_is_explicit_and_filterable(app_with_manager: FastAPI) -> None:
+    with TestClient(app_with_manager) as client:
+        ordinary = client.post("/api/missions/dispatch", json={"prompt": "Summarize this"})
+        delegated = client.post(
+            "/api/missions/dispatch",
+            json={"prompt": "Compare three backup designs", "use_subagents": True},
+        )
+        assert ordinary.status_code == delegated.status_code == 201
+        listing = client.get("/api/missions?subagents=true&active=true")
+        assert [item["id"] for item in listing.json()["missions"]] == [
+            delegated.json()["mission_id"]
+        ]
+        empty = client.post(
+            "/api/missions/dispatch", json={"prompt": "  ", "use_subagents": True},
+        )
+        assert empty.status_code == 422
+
+
 def test_list_rejects_unknown_state(app_with_manager: FastAPI) -> None:
     with TestClient(app_with_manager) as client:
         r = client.get("/api/missions?state=BOGUS")
@@ -174,6 +193,51 @@ def test_get_returns_404_for_unknown(app_with_manager: FastAPI) -> None:
     with TestClient(app_with_manager) as client:
         r = client.get("/api/missions/does-not-exist")
     assert r.status_code == 404
+
+
+async def test_subagent_status_uses_recorded_child_lifecycle(
+    manager: MissionManager, app_with_manager: FastAPI,
+) -> None:
+    mission_id = await manager.dispatch(prompt="Compare plans", subagents_enabled=True)
+    prefix = mission_id + "::sub-"
+    completed = prefix + "00"
+    stopped = prefix + "01"
+    still_running = prefix + "02"
+    events = [
+        WorkerSpawned(worker_id=worker, pid=1, cli="python", model="test", worktree="/private")
+        for worker in [completed, stopped, still_running, "parent-worker"]
+    ]
+    events += [
+        WorkerDraftReady(
+            worker_id=completed, artifact_uri="/private/output", diff="", tokens_used=0,
+            cost_usd=0, session_id="test",
+        ),
+        WorkerKilled(worker_id=stopped, reason="parent_cancelled"),
+    ]
+    for payload in events:
+        await manager.store.append_and_publish(
+            EventEnvelope(
+                mission_id=mission_id, worker_id=payload.worker_id, source_actor="worker",
+                ts_ms=now_ms(), payload=payload,
+            )
+        )
+    with TestClient(app_with_manager) as client:
+        url = f"/api/missions/{mission_id}/subagents"
+        response = client.get(url)
+        assert response.json() == {
+            "can_cancel": True, "state": "PENDING",
+            "subagents": [
+                {"number": 1, "state": "finished"},
+                {"number": 2, "state": "cancelled"},
+                {"number": 3, "state": "running"},
+            ],
+        }
+        assert client.post(f"/api/missions/{mission_id}/cancel").status_code == 200
+        result = client.get(url).json()
+        assert not result["can_cancel"]
+        assert result["state"] == "CANCELLED"
+        assert result["subagents"][-1]["state"] == "unknown"
+        assert client.get("/api/missions/does-not-exist/subagents").status_code == 404
 
 
 async def test_get_returns_events_and_verdicts(

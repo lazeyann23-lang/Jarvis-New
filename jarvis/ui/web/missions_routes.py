@@ -34,6 +34,9 @@ from jarvis.missions.events import (
     MissionFailed,
     MissionLanguage,
     MissionTimedOut,
+    WorkerDraftReady,
+    WorkerKilled,
+    WorkerSpawned,
     coerce_mission_language,
     now_ms,
 )
@@ -47,6 +50,7 @@ from jarvis.missions.state_machine import (
     is_terminal,
 )
 from jarvis.missions.stream_evidence import clean_request_body
+from jarvis.missions.subagent_fanout import SUBAGENT_WORKER_MARKER
 from jarvis.missions.tool_approvals import MissionToolApprovalCoordinator
 from jarvis.missions.voice.readback import approved_summary
 from jarvis.ui.web.missions_worker import extract_worker_missions
@@ -119,6 +123,7 @@ class DispatchBody(BaseModel):
     prompt: str
     language: MissionLanguage = "de"
     confirmed: bool = False  # Phase-5 destructive_confirm gate (UI-Path)
+    use_subagents: bool = False
 
 
 class RerunBody(BaseModel):
@@ -169,6 +174,7 @@ async def list_missions(
     state: str | None = None,
     limit: int = 100,
     active: bool = False,
+    subagents: bool = False,
 ) -> dict[str, Any]:
     """List of all missions, optionally filtered by state.
 
@@ -176,6 +182,7 @@ async def list_missions(
     - ``state``: comma-separated list of MissionState values (e.g. ``RUNNING,PENDING``).
     - ``limit``: max number of entries (server cap 1000).
     - ``active``: only missions that have not ended yet; ``state`` wins when both are given.
+    - ``subagents``: restrict the list to missions that opted into delegation.
     """
     mgr = _require_manager(request)
 
@@ -193,24 +200,21 @@ async def list_missions(
             )
         state_filter = candidates
 
-    if state_filter is None:
-        sql = (
-            "SELECT id, prompt, state, language, created_ms, updated_ms, "
-            "iteration, cost_usd FROM missions "
-            "ORDER BY created_ms DESC LIMIT ?"
-        )
-        params: tuple[Any, ...] = (limit,)
-    else:
+    clauses = []
+    filters: list[Any] = []
+    if state_filter is not None:
         placeholders = ",".join("?" for _ in state_filter)
-        sql = (
-            "SELECT id, prompt, state, language, created_ms, updated_ms, "
-            "iteration, cost_usd FROM missions "
-            f"WHERE state IN ({placeholders}) "
-            "ORDER BY created_ms DESC LIMIT ?"
-        )
-        params = (*state_filter, limit)
+        clauses.append(f"state IN ({placeholders})")
+        filters.extend(state_filter)
+    if subagents:
+        clauses.append("subagents_enabled = 1")
+    where = "WHERE " + " AND ".join(clauses) if clauses else ""
+    sql = (
+        "SELECT id, prompt, state, language, created_ms, updated_ms, "
+        f"iteration, cost_usd FROM missions {where} ORDER BY created_ms DESC LIMIT ?"
+    )
 
-    cur = await mgr.store.conn.execute(sql, params)
+    cur = await mgr.store.conn.execute(sql, (*filters, limit))
     rows = await cur.fetchall()
     await cur.close()
 
@@ -283,6 +287,47 @@ async def get_mission(mission_id: str, request: Request) -> dict[str, Any]:
         "events": events_dump,
         "verdicts": verdicts,
         "worker_snapshots": worker_snapshots,
+    }
+
+
+@router.get("/{mission_id}/subagents")
+async def get_mission_subagents(mission_id: str, request: Request) -> dict[str, Any]:
+    """Return the persisted lifecycle of the mission's child workers."""
+    mgr = _require_manager(request)
+    view = await mgr.store.get_mission_view(mission_id)
+    if view is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    state = MissionState(view[1])
+    prefix = f"{mission_id}{SUBAGENT_WORKER_MARKER}-"
+    children: dict[int, str] = {}
+    for event in await mgr.store.events_for_mission(mission_id):
+        payload = event.payload
+        if not isinstance(payload, (WorkerSpawned, WorkerDraftReady, WorkerKilled)):
+            continue
+        if not payload.worker_id.startswith(prefix):
+            continue
+        ordinal = payload.worker_id[len(prefix):]
+        if not ordinal.isdecimal():
+            continue
+        number = int(ordinal) + 1
+        if isinstance(payload, WorkerSpawned):
+            children.setdefault(number, "running")
+        elif isinstance(payload, WorkerDraftReady):
+            children[number] = "finished"
+        else:
+            children[number] = {
+                "timeout": "timed_out", "user": "cancelled", "parent_cancelled": "cancelled",
+            }.get(payload.reason, "failed")
+    return {
+        "can_cancel": not is_terminal(state),
+        "state": state.value,
+        "subagents": [
+            {
+                "number": number,
+                "state": "unknown" if status == "running" and is_terminal(state) else status,
+            }
+            for number, status in sorted(children.items())
+        ],
     }
 
 
@@ -582,7 +627,14 @@ async def dispatch_mission(
     mgr = _require_manager(request)
     kontrollierer = _optional_kontrollierer(request)
 
-    mission_id = await mgr.dispatch(prompt=body.prompt, language=body.language)
+    if body.use_subagents:
+        if not body.prompt.strip() or len(body.prompt) > 2400:
+            raise HTTPException(status_code=422, detail="Subagent mission requires a valid prompt")
+        mission_id = await mgr.dispatch(
+            prompt=body.prompt, language=body.language, subagents_enabled=True,
+        )
+    else:
+        mission_id = await mgr.dispatch(prompt=body.prompt, language=body.language)
 
     if kontrollierer is not None:
         background_tasks.add_task(kontrollierer.run_mission, mission_id)

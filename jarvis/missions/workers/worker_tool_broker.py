@@ -20,13 +20,16 @@ import time
 from contextlib import suppress
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import uuid4
 
 from jarvis.core import runtime_refs
 from jarvis.core.protocols import SupervisorToolDescriptor, SupervisorToolRequest
 from jarvis.core.redact import safe_preview
 from jarvis.safety.approval_surface import INTERACTIVE
+
+if TYPE_CHECKING:
+    from jarvis.brain.tool_gateway import MissionWorkerFanout
 
 logger = logging.getLogger(__name__)
 
@@ -749,6 +752,7 @@ class WorkerToolBroker:
         ttl_s: float = _DEFAULT_TTL_S,
         mission_id: str | None = None,
         worker_id: str | None = None,
+        mission_fanout: MissionWorkerFanout | None = None,
     ) -> WorkerToolBrokerBinding | None:
         """Resolve a live, credential-aware grant from the supervisor tools."""
         try:
@@ -758,6 +762,13 @@ class WorkerToolBroker:
         gateway = runtime_refs.get_supervisor_tool_gateway()
         if gateway is None:
             return None
+        if mission_fanout is not None and mission_id and worker_id:
+            from ..subagent_fanout import SUBAGENT_WORKER_MARKER
+
+            scope_gateway = getattr(gateway, "for_mission_worker", None)
+            if SUBAGENT_WORKER_MARKER not in worker_id and callable(scope_gateway):
+                gateway = scope_gateway(mission_fanout, mission_id, worker_id)
+                native_tool_names = (*native_tool_names, mission_fanout.tool.name)
 
         from .capabilities import worker_app_command_allowed
 
@@ -853,6 +864,7 @@ def issue_worker_tool_binding(
     ttl_s: float = _DEFAULT_TTL_S,
     mission_id: str | None = None,
     worker_id: str | None = None,
+    mission_fanout: MissionWorkerFanout | None = None,
 ) -> WorkerToolBrokerBinding | None:
     return _BROKER.issue(
         task_text=task_text,
@@ -862,6 +874,7 @@ def issue_worker_tool_binding(
         ttl_s=ttl_s,
         mission_id=mission_id,
         worker_id=worker_id,
+        mission_fanout=mission_fanout,
     )
 
 

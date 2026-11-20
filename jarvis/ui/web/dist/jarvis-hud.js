@@ -22,11 +22,11 @@
   let lastIntent = null;
   let popupSource = null;
   let popupGeneration = 0;
-  let closeDesktopPanel = null;
+  let closeLivePanel = null;
   const corePreference = 'jarvis:core-only:v1';
   try { coreOnly = localStorage.getItem(corePreference) === 'true'; } catch { /* private mode */ }
   const stop = () => {
-    closeDesktopPanel?.();
+    closeLivePanel?.();
     if (polling) clearInterval(polling);
     if (clock) clearInterval(clock);
     if (voiceNoticeTimer) clearTimeout(voiceNoticeTimer);
@@ -63,7 +63,7 @@
       <div class="jh-kern-label">SYSTEM ONLINE <span>●</span> PERSONAL ASSISTANT</div>
       <div class="jh-core-wrap" id="jh-core" data-state="idle"><div class="jh-core-outer"></div><div class="jh-core-inner"></div><img class="jh-core-art" src="/jarvis-hud-core.webp" alt="Blau leuchtender futuristischer JARVIS-Kern" /><div class="jh-cross jh-cross-v"></div><div class="jh-cross jh-cross-h"></div><div class="jh-core-label"><strong>J A R V I S</strong><span id="jh-core-state">BEREIT</span></div></div>
       <div class="jh-voice-box"><div class="jh-micro-icon">◉</div><div><div class="jh-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><strong id="jh-prompt">WIE KANN ICH DIR HEUTE HELFEN?</strong></div></div>
-      <div class="jh-core-dock" aria-label="Kern-Schnellzugriff"><button type="button" id="jh-core-listen">◉ &nbsp; ZUHÖREN</button><button type="button" id="jh-core-stop">■ &nbsp; STOP</button><button type="button" data-core-open="chat">◇ &nbsp; CHAT</button><button type="button" data-core-open="tasks">☷ &nbsp; AUFGABEN</button><button type="button" data-core-open="memory">▧ &nbsp; GEDÄCHTNIS</button><button type="button" data-core-open="system">◈ &nbsp; SYSTEM</button><button type="button" data-core-open="desktop">PC-STEUERUNG</button></div>
+      <div class="jh-core-dock" aria-label="Kern-Schnellzugriff"><button type="button" id="jh-core-listen">◉ &nbsp; ZUHÖREN</button><button type="button" id="jh-core-stop">■ &nbsp; STOP</button><button type="button" data-core-open="chat">◇ &nbsp; CHAT</button><button type="button" data-core-open="tasks">☷ &nbsp; AUFGABEN</button><button type="button" data-core-open="memory">▧ &nbsp; GEDÄCHTNIS</button><button type="button" data-core-open="system">◈ &nbsp; SYSTEM</button><button type="button" data-core-open="desktop">PC-STEUERUNG</button><button type="button" data-core-open="subagents">SUBAGENTEN</button></div>
       <div id="jh-core-notice" class="jh-core-notice" role="status" aria-live="polite" hidden></div>
     </main>
     <aside class="jh-center-right"><section class="jh-card jh-analysis"><h2>ANALYSE <span>LIVE</span></h2><div class="jh-analysis-label">SYSTEMZUSTAND / DIAGNOSE</div><div class="jh-chart"><svg viewBox="0 0 320 140" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="jh-l" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#0fe2ff" stop-opacity="0.38"/><stop offset="1" stop-color="#078eff" stop-opacity="0"/></linearGradient></defs><path d="M0 108 L30 80 55 94 87 41 115 71 149 28 181 63 216 14 248 59 280 30 320 62 L320 140 L0 140 Z" fill="url(#jh-l)"/><path d="M0 108 L30 80 55 94 87 41 115 71 149 28 181 63 216 14 248 59 280 30 320 62" fill="none" stroke="#26baff" stroke-width="2"/><path d="M0 120 L48 110 91 87 119 100 163 53 201 78 241 39 290 69 320 54" fill="none" stroke="#006bb4" stroke-width="1.5"/></svg></div><div class="jh-kv"><span>BACKEND</span><b id="jh-backend-label">Prüfe Verbindung</b></div><div class="jh-kv"><span>SPRACHMODUS</span><b id="jh-state-label">–</b></div><div class="jh-kv"><span>DATENQUELLE</span><b>Lokaler Rechner</b></div></section>
@@ -71,7 +71,7 @@
       <section class="jh-card jh-communication"><h2>KOMMUNIKATION <span>•••</span></h2><div class="jh-orbits"></div><div class="jh-kv"><span>DIENSTE</span><b id="jh-service">Prüfe</b></div><div class="jh-kv"><span>FERNSTEUERUNG</span><b>Nur nach Einrichtung</b></div><div class="jh-kv"><span>GEDÄCHTNIS</span><button type="button" data-go="memory">ÖFFNEN →</button></div></section></aside>
     <aside class="jh-right" aria-label="JARVIS Steuerung"><div class="jh-right-brand"><h1>J A R V I S</h1><p>INTELLIGENCE &nbsp; / &nbsp; CHEF EDITION</p><div class="jh-right-state"><span><i class="jh-status-dot"></i> KERN-VORSCHAU</span><span>● ICH SPRECHE</span><span>◇ CHEF</span></div></div>
       <div class="jh-stat-row"><div><span>CPU</span><strong id="jh-cpu-small">–</strong><small>▂▅▃▆▂▃▅</small></div><div><span>RAM</span><strong id="jh-ram-small">–</strong><small>▂▃▅▂▃▆▅</small></div><div><span>AUFGABEN</span><strong id="jh-task-small">–</strong><small>▁▃▂▆▄▂▃</small></div></div>
-      <nav class="jh-right-tabs" aria-label="Steuerungsbereich"><button type="button" class="selected" data-tab="chat">CHAT</button><button type="button" data-tab="desktop">PC-STEUERUNG</button><button type="button" data-tab="tasks">AUFGABEN</button><button type="button" data-tab="memory">GEDÄCHTNIS</button><button type="button" data-tab="alerts">MELDUNGEN</button></nav>
+      <nav class="jh-right-tabs" aria-label="Steuerungsbereich"><button type="button" class="selected" data-tab="chat">CHAT</button><button type="button" data-tab="desktop">PC-STEUERUNG</button><button type="button" data-tab="subagents">SUBAGENTEN</button><button type="button" data-tab="tasks">AUFGABEN</button><button type="button" data-tab="memory">GEDÄCHTNIS</button><button type="button" data-tab="alerts">MELDUNGEN</button></nav>
       <div class="jh-right-content"><div id="jh-chat-area" class="jh-chat-area"><iframe id="jh-chat-frame" title="Echter JARVIS-Chat mit Sprache" src="/?view=chats&solo=1&jarvis_hud=off"></iframe></div><div id="jh-information" class="jh-information" hidden></div></div>
       <div class="jh-right-actions"><button type="button" id="jh-full-chat">↗ CHAT IM VOLLBILD</button><div class="jh-controls"><button type="button" id="jh-mic">♬ &nbsp; ZUHÖREN</button><button type="button" id="jh-stop">■ &nbsp; STOP</button><button type="button" data-go="telephony">▯ &nbsp; HANDY</button></div><div class="jh-controls jh-secondary"><button type="button" id="jh-hide">◎ &nbsp; KLASSISCHE ANSICHT</button><button type="button" data-go="settings">⚙ &nbsp; EINSTELLUNGEN</button></div></div>
       <footer class="jh-right-foot">DESKTOP-OBERFLÄCHE · LIVE-CHAT<br/>Systemwerte sind echt, wenn verfügbar. Die Grafiken sind dekorativ.</footer>
@@ -94,8 +94,8 @@
   }
   function closeCorePopup() {
     if (!panel) return;
-    if (closeDesktopPanel && $('#jh-popup-body .jh-desktop-panel', panel)) {
-      closeDesktopPanel();
+    if (closeLivePanel && $('#jh-popup-body .jh-control-panel', panel)) {
+      closeLivePanel();
     }
     popupGeneration += 1;
     popupSource = null;
@@ -108,7 +108,7 @@
   function setCoreMode(enabled) {
     if (!panel) return;
     if (!enabled) closeCorePopup();
-    if (enabled && $('#jh-information .jh-desktop-panel', panel)) showTab('chat');
+    if (enabled && $('#jh-information .jh-control-panel', panel)) showTab('chat');
     coreOnly = enabled;
     panel.classList.toggle('jh-core-only', enabled);
     const mode = $('#jh-mode-switch', panel);
@@ -142,11 +142,15 @@
     const popup = $('#jh-core-popup', panel);
     const body = $('#jh-popup-body', panel);
     if (!popup || !body) return;
-    const labels = {chat:'LIVE-CHAT',tasks:'MEINE AUFGABEN',memory:'GEDÄCHTNIS',system:'SYSTEMSTATUS',desktop:'PC-STEUERUNG'};
+    const labels = {chat:'LIVE-CHAT',tasks:'MEINE AUFGABEN',memory:'GEDÄCHTNIS',system:'SYSTEMSTATUS',desktop:'PC-STEUERUNG',subagents:'SUBAGENTEN'};
     value('jh-popup-title', labels[kind] || 'JARVIS');
     popup.hidden = false;
     if (kind === 'desktop') {
       mountDesktopPanel(body);
+      return;
+    }
+    if (kind === 'subagents') {
+      mountSubagentsPanel(body);
       return;
     }
     if (kind === 'chat') {
@@ -360,17 +364,17 @@
     });
   }
   function mountDesktopPanel(host) {
-    closeDesktopPanel?.();
+    closeLivePanel?.();
     const life = new AbortController();
     const card = document.createElement('section');
-    card.className = 'jh-desktop-panel';
+    card.className = 'jh-control-panel';
     card.innerHTML = `
       <form>
         <label for="jh-desktop-goal">Auftrag für diesen PC</label>
         <textarea id="jh-desktop-goal" rows="3" maxlength="2000" required disabled
           placeholder="Öffne den Taschenrechner und berechne 27 × 14"></textarea>
         <p>Beim Start darf JARVIS für diesen Auftrag den Bildschirm prüfen und Maus und Tastatur bedienen.</p>
-        <div class="jh-desktop-actions">
+        <div class="jh-control-actions">
           <button type="submit" disabled>Auftrag starten</button>
           <button type="button">PC-Aufträge stoppen</button>
         </div>
@@ -474,17 +478,166 @@
       },
       'Der Stopp wurde nicht bestätigt. Drücke Esc, um die laufende Bedienung zu beenden.');
     });
-    closeDesktopPanel = () => {
+    closeLivePanel = () => {
       clearTimeout(timer);
       life.abort();
       card.remove();
-      closeDesktopPanel = null;
+      closeLivePanel = null;
     };
     void refreshJobs();
   }
+  function mountSubagentsPanel(host) {
+    closeLivePanel?.();
+    const life = new AbortController();
+    const card = document.createElement('section');
+    card.className = 'jh-control-panel';
+    card.innerHTML = `
+      <form>
+        <label for="jh-subagent-task">Auftrag für JARVIS und seine Subagenten</label>
+        <textarea id="jh-subagent-task" rows="3" maxlength="2400" required
+          placeholder="Vergleiche parallel Vor- und Nachteile von drei Backup-Strategien."></textarea>
+        <p>JARVIS kann unabhängige Teilaufgaben delegieren. Dafür muss ein Agent eingerichtet sein.</p>
+        <button type="submit" disabled>Auftrag delegieren</button>
+      </form>
+      <label for="jh-subagent-mission">Letzte delegierte Aufträge</label>
+      <select id="jh-subagent-mission" disabled></select>
+      <p data-state role="status">Verbinde mit dem Auftragsdienst …</p>
+      <p data-feedback role="status"></p>
+      <ul aria-label="Subagenten des ausgewählten Auftrags"></ul>
+      <div class="jh-control-actions">
+        <button type="button" data-cancel disabled>Auftrag abbrechen</button>
+        <button type="button" data-go="agents">Agenten öffnen</button>
+      </div>`;
+    host.appendChild(card);
+    const endpoint = '/api/missions';
+    const form = $('form', card);
+    const input = $('textarea', card);
+    const submit = $('button[type="submit"]', card);
+    const selection = $('select', card);
+    const cancel = $('[data-cancel]', card);
+    const state = $('[data-state]', card);
+    const feedback = $('[data-feedback]', card);
+    const children = $('ul', card);
+    const missionStates = {
+      PENDING: 'Wartet', RUNNING: 'Läuft', CRITIQUING: 'Ergebnis wird geprüft', LOOPING: 'Überarbeitung',
+      APPROVED: 'Abgeschlossen', FAILED: 'Fehlgeschlagen', CANCELLED: 'Abgebrochen',
+      TIMED_OUT: 'Zeitlimit erreicht', WAITING_CAPACITY: 'Wartet auf Anbieter',
+    };
+    const childStates = {
+      running: 'Läuft', finished: 'Ergebnis liegt vor', cancelled: 'Abgebrochen',
+      timed_out: 'Zeitlimit erreicht', failed: 'Fehlgeschlagen', unknown: 'Abschluss offen',
+    };
+    let selectedId = '';
+    let timer;
+    let revision = 0;
+    let busy = false;
+    let optionsKey = '';
+    const request = (path, options) => safeFetch(path, {
+      signal: AbortSignal.any([life.signal, AbortSignal.timeout(8000)]),
+      ...options,
+    });
+    const writeStatus = (line) => {
+      if (state.textContent !== line) state.textContent = line;
+    };
+    function updateOptions(missions) {
+      const key = JSON.stringify(missions.map(({id, prompt}) => [id, prompt]));
+      if (key !== optionsKey) {
+        optionsKey = key;
+        selection.replaceChildren(...missions.map(({id, prompt}) => new Option(prompt, id)));
+      }
+      if (!missions.some(mission => mission.id === selectedId)) selectedId = missions[0]?.id || '';
+      selection.value = selectedId;
+      selection.disabled = missions.length === 0;
+    }
+    async function refreshMissions() {
+      clearTimeout(timer);
+      const current = ++revision;
+      const isCurrent = () => current === revision && !life.signal.aborted;
+      try {
+        if (document.hidden || busy) return;
+        const {missions} = await request(endpoint + '?subagents=true&limit=12');
+        if (!isCurrent()) return;
+        submit.disabled = false;
+        updateOptions(missions);
+        if (!selectedId) {
+          cancel.disabled = true;
+          children.replaceChildren();
+          writeStatus('Noch keine delegierten Aufträge.');
+          return;
+        }
+        const details = await request(endpoint + '/' + encodeURIComponent(selectedId) + '/subagents');
+        if (!isCurrent()) return;
+        cancel.disabled = !details.can_cancel;
+        writeStatus((missionStates[details.state] || details.state) +
+          (details.subagents.length ? '' : ' · Noch keine Subagenten gestartet.'));
+        children.replaceChildren(...details.subagents.map((child) => {
+          const row = document.createElement('li');
+          row.textContent = `Subagent ${child.number} · ${childStates[child.state] || 'Status offen'}`;
+          return row;
+        }));
+      } catch {
+        if (isCurrent()) {
+          cancel.disabled = submit.disabled = true;
+          children.replaceChildren();
+          writeStatus('Auftragsstatus nicht erreichbar.');
+        }
+      } finally {
+        if (isCurrent()) timer = setTimeout(refreshMissions, 3000);
+      }
+    }
+    async function changeMission(path, body, confirmChange, failure) {
+      if (busy) return;
+      busy = true;
+      revision += 1;
+      submit.disabled = cancel.disabled = selection.disabled = true;
+      feedback.textContent = '';
+      try {
+        const result = await request(path, {
+          method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body),
+        });
+        if (!life.signal.aborted) feedback.textContent = confirmChange(result);
+      } catch (error) {
+        if (!life.signal.aborted) feedback.textContent = failure(error);
+      } finally {
+        busy = false;
+        if (!life.signal.aborted) void refreshMissions();
+      }
+    }
+    selection.addEventListener('change', () => {
+      selectedId = selection.value;
+      cancel.disabled = true;
+      children.replaceChildren();
+      writeStatus('Lade Auftragsstatus …');
+      void refreshMissions();
+    });
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const prompt = input.value.trim();
+      if (!prompt || submit.disabled) return;
+      void changeMission(endpoint + '/dispatch', {prompt, language:'de', use_subagents:true}, (result) => {
+        selectedId = result.mission_id;
+        if (input.value.trim() === prompt) input.value = '';
+        return result.started === 'true' ? 'Auftrag angenommen.' : 'Auftrag gespeichert. Agentenstart nicht verfügbar.';
+      }, (error) => error.message === 'HTTP 409'
+        ? 'Dieser Auftrag braucht eine Bestätigung in der Agenten-Ansicht.'
+        : 'Der Start wurde nicht bestätigt. Prüfe die Auftragsliste.');
+    });
+    cancel.addEventListener('click', () => {
+      if (!selectedId || cancel.disabled) return;
+      void changeMission(endpoint + '/' + encodeURIComponent(selectedId) + '/cancel', {},
+        () => 'Auftrag abgebrochen.', () => 'Der Abbruch wurde nicht bestätigt.');
+    });
+    closeLivePanel = () => {
+      life.abort();
+      clearTimeout(timer);
+      card.remove();
+      closeLivePanel = null;
+    };
+    void refreshMissions();
+  }
   function showTab(tab) {
     if (!panel) return;
-    closeDesktopPanel?.();
+    closeLivePanel?.();
     panel.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('selected', b.dataset.tab === tab));
     const chat = $('#jh-chat-area', panel);
     const info = $('#jh-information', panel);
@@ -493,10 +646,14 @@
     if (tab === 'chat') return;
     info.replaceChildren();
     const title = document.createElement('h3');
-    title.textContent = { tasks: 'AUFGABEN', memory: 'GEDÄCHTNIS', alerts: 'SYSTEMMELDUNGEN', desktop: 'PC-STEUERUNG' }[tab] || 'JARVIS';
+    title.textContent = { tasks: 'AUFGABEN', memory: 'GEDÄCHTNIS', alerts: 'SYSTEMMELDUNGEN', desktop: 'PC-STEUERUNG', subagents: 'SUBAGENTEN' }[tab] || 'JARVIS';
     info.appendChild(title);
     if (tab === 'desktop') {
       mountDesktopPanel(info);
+      return;
+    }
+    if (tab === 'subagents') {
+      mountSubagentsPanel(info);
       return;
     }
     if (tab === 'memory') void addCaptureControl(info);

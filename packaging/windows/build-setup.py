@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tarfile
 from urllib.request import urlopen
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -131,18 +132,17 @@ def build(work: Path, output: Path, makensis: str, seven_zip: str) -> None:
     shutil.copy2(icon, work / "jarvis.ico")
     shutil.copy2(PACKAGING / "launch-installed.pyw", stage / "launch.pyw")
 
-    dist = site / "jarvis" / "ui" / "web" / "dist"
-    if not (dist / "index.html").is_file() or "mountDesktopPanel" not in (
-        dist / "jarvis-hud.js"
-    ).read_text(encoding="utf-8"):
-        raise RuntimeError("The wheel is missing the compiled dashboard or its desktop panel")
-
     payload = work / "payload.zip"
     print("Compressing the Windows application", flush=True)
     with ZipFile(payload, "w", compression=ZIP_DEFLATED, compresslevel=3) as archive:
         for file in stage.rglob("*"):
             if file.is_file():
                 archive.write(file, file.relative_to(stage).as_posix())
+    run(
+        sys.executable, PACKAGING / "smoke-setup.py", "payload", payload,
+        "--verify", "jarvis/missions/subagent_fanout.py",
+        "--verify", "jarvis/ui/web/missions_routes.py", env=env,
+    )
     shutil.rmtree(stage)
 
     staged_exe = work / output.name
