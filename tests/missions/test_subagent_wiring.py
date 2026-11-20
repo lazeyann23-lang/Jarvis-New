@@ -174,8 +174,9 @@ async def test_opt_in_fanout_through_production_broker(
         plain_id, plain = await spawn("No delegation", enabled=False)
         await plain
         assert await manager.store.get_subagent_prompt(plain_id) is None
-        mission_id, parent = await spawn("Please summarize the evidence", enabled=True)
-        assert await manager.store.get_subagent_prompt(mission_id) == "Please summarize the evidence"
+        original_prompt = "Please summarize the evidence"
+        mission_id, parent = await spawn(original_prompt, enabled=True)
+        assert await manager.store.get_subagent_prompt(mission_id) == original_prompt
         await asyncio.wait_for(child_started.wait(), 5)
         if cancel_parent:
             parent.cancel()
